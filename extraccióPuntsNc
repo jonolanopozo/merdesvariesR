@@ -1,0 +1,80 @@
+extraccio_punts_nc<-function(Longitut="", Latitut="", FileNC="", ShortName="", NomArxiu="", Extensio=""){
+
+  require(ncdf4)
+  require(tidyverse)
+  require(lurbidate)
+
+  nc_file <- nc_open(FileNC)
+
+print(nc_file)
+
+attributes(nc_file$var)
+attributes(nc_file$dim)
+
+lat <- ncvar_get(nc_file, "latitude")
+nlat <- dim(lat)
+lon <- ncvar_get(nc_file, "longitude")
+nlon <- dim(lon)
+
+print(c(nlon, nlat))
+
+time <- ncvar_get(nc_file, "time")
+head(time)
+tunits <- ncatt_get(nc_file, "time", "units")
+nt <- dim(time)
+
+#get the variable in "matrix slices"
+var <- ncvar_get(nc_file, ShortName)
+
+fillvalue <- ncatt_get(nc_file, ShortName, "_FillValue")
+dim(var)
+var[var==fillvalue$value] <- NA
+var
+
+time_obs <- time
+dim(time_obs)
+range(time_obs)
+
+time<-time_obs*60*60
+
+t <- as.POSIXct(time,
+                            origin = "1900-01-01 00:00:00"#format time
+)
+
+lonlattime <- as.matrix(expand.grid(lon,lat,t))
+
+vec <- as.vector(var)
+length(vec)
+df <- data.frame(cbind(lonlattime, vec))
+
+head(df)
+
+colnames(df) <- c("Long","Lat","Date","u10")
+
+head(df)
+str(df)
+
+write.table(df,"df.txt")
+
+auto_round_dt<- function(dt, ndigits=3, return_copy=TRUE){
+  dt<- data.table::setDT(dt)
+  roundme<- names(sapply(dt, class))[which(sapply(dt, class) == "numeric")]
+  if(return_copy == TRUE){
+    tmp<- data.table::copy(dt)
+    out<- tmp[, (roundme):=round(.SD, ndigits), .SDcols=roundme]
+    return(out)
+  } else{
+    return(dt[, (roundme):=round(.SD, ndigits), .SDcols=roundme])
+  }
+}
+
+df_round<- auto_round_dt(dt=df, ndigits = 2, return_copy = TRUE)
+
+
+df_p1<-subset(df_round, Lat == Latitut)
+df_p2<-subset(df_p1, Long == Longitut)
+
+name<-paste0(NomArxiu, Extensio)
+
+write.table(df_p2,name)
+}
